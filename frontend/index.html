@@ -10,16 +10,15 @@
             --btn-ingreso: #10b981;
             --btn-salida: #ef4444;
             --bg-color: #f8fafc;
+            --btn-neutral: #3b82f6;
         }
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background-color: var(--bg-color);
             margin: 0;
             padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+            /* FIX VISUAL: Eliminamos el centrado vertical absoluto y lo anclamos arriba con un margen */
+            display: block; 
         }
         .app-container {
             background: white;
@@ -28,7 +27,9 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
             width: 100%;
             max-width: 400px;
+            margin: 5vh auto 0 auto; /* 5vh de separación desde arriba */
             text-align: center;
+            box-sizing: border-box;
         }
         h2 { color: var(--primary); margin-top: 0; }
         .input-group { margin-bottom: 20px; text-align: left; }
@@ -39,7 +40,7 @@
         }
         input[type="number"]:focus { border-color: var(--primary); }
         .video-container {
-            width: 100%; height: 250px; background: #e2e8f0;
+            width: 100%; height: 280px; background: #e2e8f0;
             border-radius: 8px; overflow: hidden; margin-bottom: 15px;
             position: relative;
         }
@@ -48,65 +49,91 @@
         button {
             flex: 1; padding: 14px; border: none; border-radius: 8px;
             font-size: 16px; font-weight: bold; color: white; cursor: pointer;
-            transition: opacity 0.2s;
+            transition: opacity 0.2s; width: 100%;
         }
         button:active { opacity: 0.8; }
         .btn-ingreso { background-color: var(--btn-ingreso); }
         .btn-salida { background-color: var(--btn-salida); }
+        .btn-continuar { background-color: var(--btn-neutral); margin-top: 10px;}
         .status-badge {
             display: inline-block; padding: 6px 12px; border-radius: 20px;
             font-size: 12px; font-weight: bold; margin-bottom: 15px;
             background: #f1f5f9; color: #64748b;
         }
+        /* Control de vistas de los pasos */
+        #paso-2 { display: none; } 
     </style>
 </head>
 <body>
 
 <div class="app-container">
     <h2>GeoPresente</h2>
-    <div id="gps-status" class="status-badge">⏳ Buscando señal GPS...</div>
 
-    <div class="input-group">
-        <label for="legajo">Número de Legajo</label>
-        <input type="number" id="legajo" placeholder="Ej: 1045" required>
+    <!-- PASO 1: Identificación -->
+    <div id="paso-1">
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Por favor, identifícate para comenzar.</p>
+        <div class="input-group">
+            <label for="legajo">Número de Legajo</label>
+            <input type="number" id="legajo" placeholder="Ej: 1045" required>
+        </div>
+        <button class="btn-continuar" onclick="validarLegajo()">Continuar</button>
     </div>
 
-    <div class="video-container">
-        <video id="camera" autoplay playsinline></video>
-    </div>
-    <!-- Canvas oculto para capturar la foto -->
-    <canvas id="snapshot" style="display: none;"></canvas>
+    <!-- PASO 2: Biometría y Marcación (Oculto por defecto) -->
+    <div id="paso-2">
+        <div id="gps-status" class="status-badge">⏳ Iniciando sensores...</div>
+        
+        <div class="video-container">
+            <video id="camera" autoplay playsinline></video>
+        </div>
+        <canvas id="snapshot" style="display: none;"></canvas>
 
-    <div class="btn-container">
-        <button class="btn-ingreso" onclick="procesarMarcacion('INGRESO')">INGRESO</button>
-        <button class="btn-salida" onclick="procesarMarcacion('SALIDA')">SALIDA</button>
+        <div class="btn-container">
+            <button class="btn-ingreso" onclick="procesarMarcacion('INGRESO')">INGRESO</button>
+            <button class="btn-salida" onclick="procesarMarcacion('SALIDA')">SALIDA</button>
+        </div>
     </div>
 </div>
 
 <script>
-    // --- VARIABLES GLOBALES ---
+    // Variables globales
     let gpsLocation = { lat: null, lon: null };
-    const video = document.getElementById('camera');
-    const canvas = document.getElementById('snapshot');
-    const statusBadge = document.getElementById('gps-status');
-    const API_URL = "https://geopresent.onrender.com"; // Apunta al backend local
+    const API_URL = "https://TU-URL-DE-RENDER.onrender.com/api/marcar"; // Asegúrate de tener tu URL de Render aquí
 
-    // --- 1. INICIALIZAR CÁMARA ---
+    // --- LÓGICA DE TRANSICIÓN DE PASOS ---
+    async function validarLegajo() {
+        const legajoInput = document.getElementById('legajo').value;
+        if (!legajoInput) {
+            alert("El legajo es obligatorio.");
+            return;
+        }
+
+        // TODO: Aquí más adelante conectaremos con el Backend para saber si es un usuario nuevo.
+        // Por ahora, si ingresó un número, avanzamos al Paso 2 de forma fluida.
+        
+        document.getElementById('paso-1').style.display = 'none';
+        document.getElementById('paso-2').style.display = 'block';
+
+        // Solo encendemos la cámara y el GPS cuando ya sabemos quién es
+        iniciarCamara();
+        iniciarGPS();
+    }
+
+    // --- MANEJO DE SENSORES ---
     async function iniciarCamara() {
+        const video = document.getElementById('camera');
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "user" } // Fuerza la cámara frontal
-            });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
             video.srcObject = stream;
         } catch (err) {
-            console.error("Error al acceder a la cámara:", err);
-            alert("Es obligatorio permitir el acceso a la cámara para dar el presente.");
+            alert("Se requiere acceso a la cámara para dar el presente.");
         }
     }
 
-    // --- 2. INICIALIZAR GPS ---
     function iniciarGPS() {
+        const statusBadge = document.getElementById('gps-status');
         if ("geolocation" in navigator) {
+            statusBadge.innerText = "⏳ Buscando señal GPS...";
             navigator.geolocation.watchPosition(
                 (position) => {
                     gpsLocation.lat = position.coords.latitude;
@@ -118,72 +145,54 @@
                 (error) => {
                     statusBadge.innerText = "❌ Error de GPS";
                     statusBadge.style.color = "#ef4444";
-                    alert("Por favor, activa la ubicación (GPS) de tu dispositivo.");
                 },
                 { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
             );
-        } else {
-            alert("Tu navegador no soporta geolocalización.");
         }
     }
 
-    // --- 3. LÓGICA DE MARCACIÓN ---
+    // --- PROCESAMIENTO DE MARCACIÓN ---
     async function procesarMarcacion(tipo) {
-        const legajoInput = document.getElementById('legajo').value;
-        
-        // Validaciones previas
-        if (!legajoInput) return alert("Debes ingresar tu legajo.");
-        if (!gpsLocation.lat) return alert("Aún estamos obteniendo tu ubicación GPS. Espera unos segundos.");
+        if (!gpsLocation.lat) return alert("Aguarde un momento, buscando señal GPS...");
 
-        // Capturar foto en Base64
+        const video = document.getElementById('camera');
+        const canvas = document.getElementById('snapshot');
         const context = canvas.getContext('2d');
+        
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        // Comprimimos un poco la imagen (0.7 de calidad) para no saturar el envío
-        const selfieBase64 = canvas.toDataURL('image/jpeg', 0.7);
-
-        // Armar el paquete de datos
         const payload = {
-            legajo: parseInt(legajoInput),
+            legajo: parseInt(document.getElementById('legajo').value),
             tipo_marcacion: tipo,
             latitud_celular: gpsLocation.lat,
             longitud_celular: gpsLocation.lon,
-            selfie_b64: selfieBase64
+            selfie_b64: canvas.toDataURL('image/jpeg', 0.7)
         };
 
-        // Enviar a nuestra API FastAPI
+        const statusBadge = document.getElementById('gps-status');
+        statusBadge.innerText = "⏳ Subiendo datos...";
+
         try {
-            statusBadge.innerText = "⏳ Procesando...";
             const response = await fetch(API_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
-
             const data = await response.json();
 
             if (response.ok) {
-                alert(`¡Marcación de ${tipo} Exitosa!\nServicio: ${data.data.descripcion_servicio}`);
-                document.getElementById('legajo').value = ''; // Limpiar campo
-                statusBadge.innerText = "✅ GPS Localizado";
+                alert(`¡${tipo} exitoso!\nServicio: ${data.data.descripcion_servicio}`);
+                window.location.reload(); // Recarga la app para el siguiente vigilador
             } else {
-                alert(`Error: ${data.detail}`);
-                statusBadge.innerText = "✅ GPS Localizado";
+                alert(`Error: ${data.detail || 'Fallo de conexión'}`);
             }
         } catch (error) {
-            console.error("Error conectando con la API:", error);
-            alert("Error de conexión. Verifica que el servidor backend esté corriendo.");
-            statusBadge.innerText = "✅ GPS Localizado";
+            alert("Error conectando con el servidor central.");
         }
+        statusBadge.innerText = "✅ GPS Localizado";
     }
-
-    // Arrancar servicios al cargar la página
-    window.onload = () => {
-        iniciarCamara();
-        iniciarGPS();
-    };
 </script>
 
 </body>
