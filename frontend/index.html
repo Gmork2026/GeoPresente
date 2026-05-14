@@ -114,7 +114,7 @@
     let esUsuarioNuevo = false;
     
     // ⚠️ REEMPLAZA ESTO CON TU URL DE RENDER
-    const BASE_API_URL = "https://TU-URL-DE-RENDER.onrender.com"; 
+    const BASE_API_URL = "https://geopresent.onrender.com";
 
     // --- 1. LÓGICA DE VALIDACIÓN ---
     async function validarLegajo() {
@@ -158,7 +158,8 @@
             }
         } catch (error) {
             console.error(error);
-            alert("Error al conectar con la base de datos.");
+            // Ahora la alerta nos dirá el motivo real técnico del fallo
+            alert("Error de conexión: " + error.message + "\nVerifica tu conexión a internet.");
             btnValidar.innerText = "Continuar";
             btnValidar.disabled = false;
         }

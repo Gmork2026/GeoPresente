@@ -17,7 +17,7 @@ app.add_middleware(
 )
 
 # ⚠️ IMPORTANTE: Pega aquí la URL de tu Apps Script
-GAS_URL = "URL_DE_TU_APPS_SCRIPT_AQUI"
+GAS_URL = "https://script.google.com/macros/s/AKfycbzsj8bjSlAyubBGQm7KORL4tV-k5bp1hBxlLcfyVoTs2QMyCLJ6RdNmw_OGwfOD19V3/exec"
 
 # --- 1. MODELOS DE DATOS ---
 class MarcacionIn(BaseModel):
