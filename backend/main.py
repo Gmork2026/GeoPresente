@@ -119,6 +119,7 @@ def procesar_marcacion(datos: MarcacionIn):
         desvio = int(distancia_minima - servicio_cercano['tolerancia_activa'])
         observaciones += f" Fuera de rango por {desvio}m."
 
+    # Preparamos el paquete completo para n8n
     resultado = {
         "legajo": datos.legajo,
         "tipo_marcacion": datos.tipo_marcacion,
@@ -129,16 +130,19 @@ def procesar_marcacion(datos: MarcacionIn):
         "distancia_metros": round(distancia_minima, 2),
         "es_valida": es_valida,
         "observaciones": observaciones,
-        "selfie_url": "PENDIENTE_N8N",
-        # Datos extra para que Apps Script sepa si debe crear al vigilador
+        "selfie_b64": datos.selfie_b64, # ⚠️ CAMBIO VITAL: Enviamos la foto real a n8n
         "is_nuevo_usuario": True if datos.nombre_nuevo else False,
         "nombre_nuevo": datos.nombre_nuevo,
         "dni_nuevo": datos.dni_nuevo
     }
 
+    # ⚠️ PEGA AQUÍ LA TEST URL DE TU NODO WEBHOOK DE n8n
+    N8N_WEBHOOK_URL = "http://localhost:5678/webhook-test/marcar-presentismo"
+
     try:
-        requests.post(GAS_URL, json=resultado)
+        # Enviamos el paquete a n8n en lugar de ir directo a Google Sheets
+        requests.post(N8N_WEBHOOK_URL, json=resultado)
     except Exception as e:
-        print(f"Error al guardar en Google Sheets: {e}")
+        print(f"Error enviando a n8n: {e}")
 
     return {"status": "success", "data": resultado}
