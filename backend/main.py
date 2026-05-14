@@ -91,9 +91,11 @@ def procesar_marcacion(datos: MarcacionIn):
         try:
             lat_serv = float(servicio["Latitud"])
             lon_serv = float(servicio["Longitud"])
-            tolerancia = int(servicio["Tolerancia_Metros"])
-        except (ValueError, KeyError):
-            continue 
+            # Ajustamos el código al nombre exacto de tu columna
+            tolerancia = int(servicio["Tolerancia en metro"]) 
+        except (ValueError, KeyError) as e:
+            print(f"Error procesando fila: {e}") # Esto nos ayudará a ver en Render si hay filas vacías
+            continue
 
         dist = calcular_distancia(datos.latitud_celular, datos.longitud_celular, lat_serv, lon_serv)
         
