@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GeoPresente - Control de Acceso</title>
+    <style>
+        :root {
+            --primary: #0f172a;
+            --btn-ingreso: #10b981;
+            --btn-salida: #ef4444;
+            --bg-color: #f8fafc;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .app-container {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        h2 { color: var(--primary); margin-top: 0; }
+        .input-group { margin-bottom: 20px; text-align: left; }
+        label { font-size: 14px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px; }
+        input[type="number"] {
+            width: 100%; padding: 12px; border: 2px solid #e2e8f0; 
+            border-radius: 8px; font-size: 16px; box-sizing: border-box; outline: none;
+        }
+        input[type="number"]:focus { border-color: var(--primary); }
+        .video-container {
+            width: 100%; height: 250px; background: #e2e8f0;
+            border-radius: 8px; overflow: hidden; margin-bottom: 15px;
+            position: relative;
+        }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .btn-container { display: flex; gap: 10px; margin-top: 20px; }
+        button {
+            flex: 1; padding: 14px; border: none; border-radius: 8px;
+            font-size: 16px; font-weight: bold; color: white; cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:active { opacity: 0.8; }
+        .btn-ingreso { background-color: var(--btn-ingreso); }
+        .btn-salida { background-color: var(--btn-salida); }
+        .status-badge {
+            display: inline-block; padding: 6px 12px; border-radius: 20px;
+            font-size: 12px; font-weight: bold; margin-bottom: 15px;
+            background: #f1f5f9; color: #64748b;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <h2>GeoPresente</h2>
+    <div id="gps-status" class="status-badge">⏳ Buscando señal GPS...</div>
+
+    <div class="input-group">
+        <label for="legajo">Número de Legajo</label>
+        <input type="number" id="legajo" placeholder="Ej: 1045" required>
+    </div>
+
+    <div class="video-container">
+        <video id="camera" autoplay playsinline></video>
+    </div>
+    <!-- Canvas oculto para capturar la foto -->
+    <canvas id="snapshot" style="display: none;"></canvas>
+
+    <div class="btn-container">
+        <button class="btn-ingreso" onclick="procesarMarcacion('INGRESO')">INGRESO</button>
+        <button class="btn-salida" onclick="procesarMarcacion('SALIDA')">SALIDA</button>
+    </div>
+</div>
+
+<script>
+    // --- VARIABLES GLOBALES ---
+    let gpsLocation = { lat: null, lon: null };
+    const video = document.getElementById('camera');
+    const canvas = document.getElementById('snapshot');
+    const statusBadge = document.getElementById('gps-status');
+    const API_URL = "https://geopresent.onrender.com"; // Apunta al backend local
+
+    // --- 1. INICIALIZAR CÁMARA ---
+    async function iniciarCamara() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "user" } // Fuerza la cámara frontal
+            });
+            video.srcObject = stream;
+        } catch (err) {
+            console.error("Error al acceder a la cámara:", err);
+            alert("Es obligatorio permitir el acceso a la cámara para dar el presente.");
+        }
+    }
+
+    // --- 2. INICIALIZAR GPS ---
+    function iniciarGPS() {
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition(
+                (position) => {
+                    gpsLocation.lat = position.coords.latitude;
+                    gpsLocation.lon = position.coords.longitude;
+                    statusBadge.innerText = "✅ GPS Localizado";
+                    statusBadge.style.color = "#10b981";
+                    statusBadge.style.background = "#d1fae5";
+                },
+                (error) => {
+                    statusBadge.innerText = "❌ Error de GPS";
+                    statusBadge.style.color = "#ef4444";
+                    alert("Por favor, activa la ubicación (GPS) de tu dispositivo.");
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+            );
+        } else {
+            alert("Tu navegador no soporta geolocalización.");
+        }
+    }
+
+    // --- 3. LÓGICA DE MARCACIÓN ---
+    async function procesarMarcacion(tipo) {
+        const legajoInput = document.getElementById('legajo').value;
+        
+        // Validaciones previas
+        if (!legajoInput) return alert("Debes ingresar tu legajo.");
+        if (!gpsLocation.lat) return alert("Aún estamos obteniendo tu ubicación GPS. Espera unos segundos.");
+
+        // Capturar foto en Base64
+        const context = canvas.getContext('2d');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Comprimimos un poco la imagen (0.7 de calidad) para no saturar el envío
+        const selfieBase64 = canvas.toDataURL('image/jpeg', 0.7);
+
+        // Armar el paquete de datos
+        const payload = {
+            legajo: parseInt(legajoInput),
+            tipo_marcacion: tipo,
+            latitud_celular: gpsLocation.lat,
+            longitud_celular: gpsLocation.lon,
+            selfie_b64: selfieBase64
+        };
+
+        // Enviar a nuestra API FastAPI
+        try {
+            statusBadge.innerText = "⏳ Procesando...";
+            const response = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(`¡Marcación de ${tipo} Exitosa!\nServicio: ${data.data.descripcion_servicio}`);
+                document.getElementById('legajo').value = ''; // Limpiar campo
+                statusBadge.innerText = "✅ GPS Localizado";
+            } else {
+                alert(`Error: ${data.detail}`);
+                statusBadge.innerText = "✅ GPS Localizado";
+            }
+        } catch (error) {
+            console.error("Error conectando con la API:", error);
+            alert("Error de conexión. Verifica que el servidor backend esté corriendo.");
+            statusBadge.innerText = "✅ GPS Localizado";
+        }
+    }
+
+    // Arrancar servicios al cargar la página
+    window.onload = () => {
+        iniciarCamara();
+        iniciarGPS();
+    };
+</script>
+
+</body>
+</html>
