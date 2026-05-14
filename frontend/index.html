@@ -216,6 +216,14 @@
     async function procesarMarcacion(tipo) {
         if (!gpsLocation.lat) return alert("Aguarde un momento, buscando señal GPS...");
 
+        // Bloqueo de botones anti-doble clic
+        const btnIngreso = document.querySelector('.btn-ingreso');
+        const btnSalida = document.querySelector('.btn-salida');
+        btnIngreso.disabled = true;
+        btnSalida.disabled = true;
+        btnIngreso.innerText = "⏳...";
+        btnSalida.innerText = "⏳...";
+
         const video = document.getElementById('camera');
         const canvas = document.getElementById('snapshot');
         const context = canvas.getContext('2d');

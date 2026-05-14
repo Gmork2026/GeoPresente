@@ -129,15 +129,16 @@ def procesar_marcacion(datos: MarcacionIn):
         "distancia_metros": round(distancia_minima, 2),
         "es_valida": es_valida,
         "observaciones": observaciones,
-        "selfie_url": "PENDIENTE_N8N" 
+        "selfie_url": "PENDIENTE_N8N",
+        # Datos extra para que Apps Script sepa si debe crear al vigilador
+        "is_nuevo_usuario": True if datos.nombre_nuevo else False,
+        "nombre_nuevo": datos.nombre_nuevo,
+        "dni_nuevo": datos.dni_nuevo
     }
 
-    # ---> INICIO DEL CÓDIGO NUEVO <---
-    # Enviamos los datos a Google Apps Script para que los escriba en la hoja
     try:
         requests.post(GAS_URL, json=resultado)
     except Exception as e:
         print(f"Error al guardar en Google Sheets: {e}")
-    # ---> FIN DEL CÓDIGO NUEVO <---
 
     return {"status": "success", "data": resultado}
