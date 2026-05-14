@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 import math
 import requests
 
@@ -15,69 +16,84 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ⚠️ IMPORTANTE: Pega aquí la URL que obtuviste al implementar Google Apps Script
+# ⚠️ IMPORTANTE: Pega aquí la URL de tu Apps Script
 GAS_URL = "URL_DE_TU_APPS_SCRIPT_AQUI"
 
-# --- 1. MODELOS DE DATOS (Entrada esperada del Frontend) ---
+# --- 1. MODELOS DE DATOS ---
 class MarcacionIn(BaseModel):
     legajo: int
-    tipo_marcacion: str  # "INGRESO" o "SALIDA"
+    nombre_nuevo: Optional[str] = None
+    dni_nuevo: Optional[str] = None
+    tipo_marcacion: str  
     latitud_celular: float
     longitud_celular: float
     selfie_b64: str
 
-# --- 2. LÓGICA MATEMÁTICA (Fórmula de Haversine) ---
+# --- 2. LÓGICA MATEMÁTICA (Haversine) ---
 def calcular_distancia(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calcula la distancia exacta en metros entre dos coordenadas GPS."""
-    R = 6371000  # Radio de la Tierra en metros
-    phi_1 = math.radians(lat1)
-    phi_2 = math.radians(lat2)
+    R = 6371000  
+    phi_1, phi_2 = math.radians(lat1), math.radians(lat2)
     delta_phi = math.radians(lat2 - lat1)
     delta_lambda = math.radians(lon2 - lon1)
-
-    a = math.sin(delta_phi / 2.0) ** 2 + \
-        math.cos(phi_1) * math.cos(phi_2) * \
-        math.sin(delta_lambda / 2.0) ** 2
-    
+    a = math.sin(delta_phi / 2.0) ** 2 + math.cos(phi_1) * math.cos(phi_2) * math.sin(delta_lambda / 2.0) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
 # --- 3. CONEXIÓN A LA BASE DE DATOS (Google Sheets) ---
 def obtener_servicios():
-    """Llama a tu Google Apps Script para traer la lista de servicios actualizada."""
     try:
-        response = requests.get(f"{GAS_URL}?action=servicios")
-        data = response.json()
-        if data.get("status") == "success":
-            return data.get("data", [])
-        return []
+        res = requests.get(f"{GAS_URL}?action=servicios")
+        return res.json().get("data", []) if res.json().get("status") == "success" else []
+    except: return []
+
+def obtener_vigiladores():
+    """Llama a Google Apps Script para traer la lista de vigiladores."""
+    try:
+        res = requests.get(f"{GAS_URL}?action=vigiladores")
+        return res.json().get("data", []) if res.json().get("status") == "success" else []
     except Exception as e:
-        print(f"Error conectando a Sheets: {e}")
+        print(f"Error conectando a Sheets (Vigiladores): {e}")
         return []
 
-# --- 4. ENDPOINT PRINCIPAL ---
+# --- 4. ENDPOINTS ---
 @app.get("/")
 def read_root():
-    return {"status": "online", "sistema": "GeoPresente API", "version": "1.0"}
+    return {"status": "online", "sistema": "GeoPresente API"}
+
+# NUEVO ENDPOINT: Validar Legajo
+@app.get("/api/validar/{legajo}")
+def validar_legajo(legajo: int):
+    vigiladores = obtener_vigiladores()
+    
+    # Buscamos si el legajo está en la lista (convertimos a str para asegurar la coincidencia)
+    for v in vigiladores:
+        if str(v.get("Legajo")) == str(legajo):
+            return {
+                "status": "success", 
+                "existe": True, 
+                "nombre": v.get("Nombre_Completo", "Vigilador")
+            }
+            
+    # Si termina el bucle y no lo encontró
+    return {"status": "success", "existe": False}
+
 
 @app.post("/api/marcar")
 def procesar_marcacion(datos: MarcacionIn):
     servicios = obtener_servicios()
     if not servicios:
-        raise HTTPException(status_code=500, detail="No se pudieron cargar los servicios desde la base de datos.")
+        raise HTTPException(status_code=500, detail="Error de DB")
 
     servicio_cercano = None
     distancia_minima = float('inf')
 
-    # Buscar el servicio más cercano matemáticamente
     for servicio in servicios:
         try:
-            # Adaptamos las claves según los encabezados que definimos en tu hoja
             lat_serv = float(servicio["Latitud"])
             lon_serv = float(servicio["Longitud"])
             tolerancia = int(servicio["Tolerancia_Metros"])
         except (ValueError, KeyError):
-            continue # Si una fila tiene datos vacíos o erróneos, la ignoramos para que no caiga el servidor
+            continue 
 
         dist = calcular_distancia(datos.latitud_celular, datos.longitud_celular, lat_serv, lon_serv)
         
@@ -89,17 +105,18 @@ def procesar_marcacion(datos: MarcacionIn):
     if not servicio_cercano:
         raise HTTPException(status_code=400, detail="No se detectó ningún servicio.")
 
-    # Validar si está dentro de la tolerancia permitida
-    es_valida = False
-    observaciones = "Ok"
+    es_valida = distancia_minima <= servicio_cercano["tolerancia_activa"]
     
-    if distancia_minima <= servicio_cercano["tolerancia_activa"]:
-        es_valida = True
-    else:
-        es_valida = False
-        observaciones = f"Fuera de rango por {int(distancia_minima - servicio_cercano['tolerancia_activa'])} metros."
+    # Manejo de Observaciones
+    observaciones = "Ok"
+    if datos.nombre_nuevo:
+        # Si es nuevo, guardamos su nombre y su DNI en las observaciones
+        observaciones = f"NUEVO USUARIO: {datos.nombre_nuevo} - DNI: {datos.dni_nuevo}."
+        
+    if not es_valida:
+        desvio = int(distancia_minima - servicio_cercano['tolerancia_activa'])
+        observaciones += f" Fuera de rango por {desvio}m."
 
-    # Estructuramos la respuesta final
     resultado = {
         "legajo": datos.legajo,
         "tipo_marcacion": datos.tipo_marcacion,
@@ -110,7 +127,7 @@ def procesar_marcacion(datos: MarcacionIn):
         "distancia_metros": round(distancia_minima, 2),
         "es_valida": es_valida,
         "observaciones": observaciones,
-        "selfie_url": "PENDIENTE_N8N" # n8n procesará la foto luego
+        "selfie_url": "PENDIENTE_N8N" 
     }
 
     return {"status": "success", "data": resultado}

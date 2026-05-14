@@ -71,12 +71,25 @@
 
     <!-- PASO 1: Identificación -->
     <div id="paso-1">
-        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Por favor, identifícate para comenzar.</p>
+        <p id="instruccion-paso1" style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Por favor, identifícate para comenzar.</p>
+        
         <div class="input-group">
             <label for="legajo">Número de Legajo</label>
             <input type="number" id="legajo" placeholder="Ej: 1045" required>
         </div>
-        <button class="btn-continuar" onclick="validarLegajo()">Continuar</button>
+
+        <!-- DIV OCULTO: Solo aparece si el legajo es nuevo -->
+        <div id="div-registro" style="display: none; margin-top: 15px; background: #f1f5f9; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1;">
+            <p style="color: #ef4444; font-weight: bold; margin-top: 0; font-size: 14px;">Legajo no encontrado. Completa tus datos:</p>
+            
+            <label for="nombre_nuevo">Nombre y Apellido</label>
+            <input type="text" id="nombre_nuevo" placeholder="Ej: Juan Pérez" style="margin-bottom: 15px;">
+
+            <label for="dni_nuevo">Número de DNI</label>
+            <input type="number" id="dni_nuevo" placeholder="Sin puntos, ej: 35123456">
+        </div>
+
+        <button id="btn-validar" class="btn-continuar" onclick="validarLegajo()">Continuar</button>
     </div>
 
     <!-- PASO 2: Biometría y Marcación (Oculto por defecto) -->
@@ -98,28 +111,75 @@
 <script>
     // Variables globales
     let gpsLocation = { lat: null, lon: null };
-    const API_URL = "https://TU-URL-DE-RENDER.onrender.com/api/marcar"; // Asegúrate de tener tu URL de Render aquí
+    let esUsuarioNuevo = false;
+    
+    // ⚠️ REEMPLAZA ESTO CON TU URL DE RENDER
+    const BASE_API_URL = "https://TU-URL-DE-RENDER.onrender.com"; 
 
-    // --- LÓGICA DE TRANSICIÓN DE PASOS ---
+    // --- 1. LÓGICA DE VALIDACIÓN ---
     async function validarLegajo() {
         const legajoInput = document.getElementById('legajo').value;
-        if (!legajoInput) {
-            alert("El legajo es obligatorio.");
+        const btnValidar = document.getElementById('btn-validar');
+        const instruccion = document.getElementById('instruccion-paso1');
+        
+        if (!legajoInput) return alert("El legajo es obligatorio.");
+
+        // Si ya determinamos que es nuevo y le pedimos el nombre, avanzamos
+        if (esUsuarioNuevo) {
+            const nombreInput = document.getElementById('nombre_nuevo').value;
+            const dniInput = document.getElementById('dni_nuevo').value;
+            
+            if (!nombreInput || !dniInput) {
+                return alert("Por favor, ingresa tu nombre y tu DNI para registrarte.");
+            }
+            avanzarAlPaso2(`Bienvenido, ${nombreInput}`);
             return;
         }
 
-        // TODO: Aquí más adelante conectaremos con el Backend para saber si es un usuario nuevo.
-        // Por ahora, si ingresó un número, avanzamos al Paso 2 de forma fluida.
-        
+        btnValidar.innerText = "⏳ Validando...";
+        btnValidar.disabled = true;
+
+        try {
+            // Consultamos al backend
+            const response = await fetch(`${BASE_API_URL}/api/validar/${legajoInput}`);
+            const data = await response.json();
+
+            if (data.existe) {
+                // El vigilador existe
+                avanzarAlPaso2(`Hola, ${data.nombre}`);
+            } else {
+                // El vigilador NO existe
+                esUsuarioNuevo = true;
+                instruccion.innerText = "Necesitamos registrarte en el sistema.";
+                document.getElementById('div-registro').style.display = "block"; // Cambiamos a div-registro
+                document.getElementById('legajo').disabled = true; 
+                btnValidar.innerText = "Continuar y Activar Cámara";
+                btnValidar.disabled = false;
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error al conectar con la base de datos.");
+            btnValidar.innerText = "Continuar";
+            btnValidar.disabled = false;
+        }
+    }
+
+    function avanzarAlPaso2(mensajeBienvenida) {
         document.getElementById('paso-1').style.display = 'none';
         document.getElementById('paso-2').style.display = 'block';
+        
+        // Agregamos un saludito arriba de la cámara
+        const saludo = document.createElement('h3');
+        saludo.innerText = mensajeBienvenida;
+        saludo.style.color = "#0f172a";
+        saludo.style.marginTop = "0";
+        document.getElementById('paso-2').prepend(saludo);
 
-        // Solo encendemos la cámara y el GPS cuando ya sabemos quién es
         iniciarCamara();
         iniciarGPS();
     }
 
-    // --- MANEJO DE SENSORES ---
+    // --- 2. MANEJO DE SENSORES ---
     async function iniciarCamara() {
         const video = document.getElementById('camera');
         try {
@@ -151,7 +211,7 @@
         }
     }
 
-    // --- PROCESAMIENTO DE MARCACIÓN ---
+    // --- 3. PROCESAMIENTO DE MARCACIÓN ---
     async function procesarMarcacion(tipo) {
         if (!gpsLocation.lat) return alert("Aguarde un momento, buscando señal GPS...");
 
@@ -165,6 +225,8 @@
         
         const payload = {
             legajo: parseInt(document.getElementById('legajo').value),
+            nombre_nuevo: esUsuarioNuevo ? document.getElementById('nombre_nuevo').value : null,
+            dni_nuevo: esUsuarioNuevo ? document.getElementById('dni_nuevo').value : null, // <-- DNI agregado aquí
             tipo_marcacion: tipo,
             latitud_celular: gpsLocation.lat,
             longitud_celular: gpsLocation.lon,
@@ -175,7 +237,7 @@
         statusBadge.innerText = "⏳ Subiendo datos...";
 
         try {
-            const response = await fetch(API_URL, {
+            const response = await fetch(`${BASE_API_URL}/api/marcar`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
@@ -184,7 +246,7 @@
 
             if (response.ok) {
                 alert(`¡${tipo} exitoso!\nServicio: ${data.data.descripcion_servicio}`);
-                window.location.reload(); // Recarga la app para el siguiente vigilador
+                window.location.reload(); 
             } else {
                 alert(`Error: ${data.detail || 'Fallo de conexión'}`);
             }
