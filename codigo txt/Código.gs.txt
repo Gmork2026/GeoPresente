@@ -1,0 +1,54 @@
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("GeoPresente");
+    
+    // El orden exacto de tus encabezados
+    sheet.appendRow([
+      new Date(),                 // Timestamp_Servidor
+      data.legajo,                // Legajo
+      data.tipo_marcacion,        // Tipo_Marcacion
+      data.id_servicio,           // ID_Serv_Detectado
+      data.descripcion_servicio,  // Descripcion_Serv
+      data.lat_celular,           // Lat_Celular
+      data.lon_celular,           // Lon_Celular
+      data.distancia_metros,      // Distancia_Metros
+      data.es_valida,             // Es_Valida
+      data.observaciones,         // Observaciones
+      data.selfie_url             // Selfie_URL
+    ]);
+
+    return ContentService.createTextOutput(JSON.stringify({"status": "success"}))
+                         .setMimeType(ContentService.MimeType.JSON);
+                         
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({"status": "error", "mensaje": error.toString()}))
+                         .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  var action = e.parameter.action;
+  var sheetName = action === "servicios" ? "Servicios" : (action === "vigiladores" ? "Vigiladores" : null);
+  
+  if (!sheetName) {
+     return ContentService.createTextOutput(JSON.stringify({"error": "Acción inválida"}))
+                          .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var result = [];
+  
+  for (var i = 1; i < data.length; i++) {
+    var obj = {};
+    for (var j = 0; j < headers.length; j++) {
+      obj[headers[j]] = data[i][j];
+    }
+    result.push(obj);
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({"status": "success", "data": result}))
+                       .setMimeType(ContentService.MimeType.JSON);
+}

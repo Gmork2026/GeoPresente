@@ -132,12 +132,4 @@ def procesar_marcacion(datos: MarcacionIn):
         "selfie_url": "PENDIENTE_N8N" 
     }
 
-    # ---> INICIO DEL CÓDIGO NUEVO <---
-    # Enviamos los datos a Google Apps Script para que los escriba en la hoja
-    try:
-        requests.post(GAS_URL, json=resultado)
-    except Exception as e:
-        print(f"Error al guardar en Google Sheets: {e}")
-    # ---> FIN DEL CÓDIGO NUEVO <---
-
     return {"status": "success", "data": resultado}
