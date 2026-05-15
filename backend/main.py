@@ -140,9 +140,15 @@ def procesar_marcacion(datos: MarcacionIn):
     N8N_WEBHOOK_URL = "https://n8n-production-115e.up.railway.app/webhook-test/marcar-presentismo"
 
     try:
-        # Enviamos el paquete a n8n en lugar de ir directo a Google Sheets
-        requests.post(N8N_WEBHOOK_URL, json=resultado)
-    except Exception as e:
-        print(f"Error enviando a n8n: {e}")
+        # Esperamos la respuesta de n8n
+        respuesta_n8n = requests.post(N8N_WEBHOOK_URL, json=resultado)
+        datos_n8n = respuesta_n8n.json()
+
+        # Si n8n o nuestro "Respond to Webhook" nos dicen que hay error biométrico
+        if datos_n8n.get("status") == "error":
+            raise HTTPException(status_code=400, detail=datos_n8n.get("detail", "Error biométrico. Reintente."))
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail="Error de comunicación con el motor de IA.")
 
     return {"status": "success", "data": resultado}
