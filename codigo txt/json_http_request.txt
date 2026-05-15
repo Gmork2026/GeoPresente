@@ -1,0 +1,15 @@
+{
+  "legajo": {{$node["Webhook"].json["body"]["legajo"]}},
+  "tipo_marcacion": "{{$node["Webhook"].json["body"]["tipo_marcacion"]}}",
+  "id_servicio": "{{$node["Webhook"].json["body"]["id_servicio"]}}",
+  "descripcion_servicio": "{{$node["Webhook"].json["body"]["descripcion_servicio"]}}",
+  "lat_celular": {{$node["Webhook"].json["body"]["lat_celular"]}},
+  "lon_celular": {{$node["Webhook"].json["body"]["lon_celular"]}},
+  "distancia_metros": {{$node["Webhook"].json["body"]["distancia_metros"]}},
+  "es_valida": {{$node["Webhook"].json["body"]["es_valida"]}},
+  "observaciones": "{{$node["Webhook"].json["body"]["observaciones"]}}",
+  "is_nuevo_usuario": {{$node["Webhook"].json["body"]["is_nuevo_usuario"]}},
+  "nombre_nuevo": "{{$node["Webhook"].json["body"]["nombre_nuevo"]}}",
+  "dni_nuevo": "{{$node["Webhook"].json["body"]["dni_nuevo"]}}",
+  "selfie_url": "{{$json["webViewLink"]}}" 
+}

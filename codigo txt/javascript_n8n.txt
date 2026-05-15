@@ -1,0 +1,22 @@
+const items = $input.all();
+
+for (const item of items) {
+  // Detectamos dinámicamente si los datos están en la raíz o dentro de "body"
+  const datos = item.json.body ? item.json.body : item.json;
+
+  // Extraemos la foto y creamos el nombre
+  const base64Data = datos.selfie_b64.split(',')[1];
+  const nombreArchivo = `Selfie_Legajo_${datos.legajo}_${new Date().getTime()}.jpg`;
+
+  // Empaquetamos el archivo binario
+  item.binary = item.binary || {};
+  
+  // @ts-ignore
+  item.binary.data = {
+    data: base64Data,
+    mimeType: 'image/jpeg',
+    fileName: nombreArchivo
+  };
+}
+
+return items;
