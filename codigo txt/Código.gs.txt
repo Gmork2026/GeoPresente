@@ -1,9 +1,50 @@
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetGeo = ss.getSheetByName("GeoPresente");
     
-    // 1. Guardar siempre el registro en GeoPresente
-    var sheetGeo = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("GeoPresente");
+    // --- LÓGICA DE INTELIGENCIA Y VALIDACIÓN ---
+    var legajo = data.legajo;
+    var tipoActual = data.tipo_marcacion; // INGRESO o SALIDA
+    var idServicioActual = data.id_servicio;
+    
+    // Buscamos la última marcación de este legajo para validar estado
+    var lastMarcacion = obtenerUltimaMarcacion(sheetGeo, legajo);
+    
+    var horasTrabajadas = "";
+    var validacionLogica = "OK";
+    var observacionesFinales = data.observaciones;
+
+    if (lastMarcacion) {
+      var tipoAnterior = lastMarcacion.tipo;
+      var idServicioAnterior = lastMarcacion.id_servicio;
+      var fechaAnterior = new Date(lastMarcacion.timestamp);
+
+      // 1. Validación de Doble Marcación
+      if (tipoActual === tipoAnterior) {
+        validacionLogica = "ALERTA: DOBLE " + tipoActual;
+        observacionesFinales += " El usuario intentó marcar " + tipoActual + " dos veces seguidas.";
+      }
+
+      // 2. Validación de Servicio (Si sale de un lugar distinto al que entró)
+      if (tipoActual === "SALIDA" && tipoAnterior === "INGRESO" && idServicioActual !== idServicioAnterior) {
+        validacionLogica = "ALERTA: SERVICIO INCOHERENTE";
+        observacionesFinales += " Salió de un servicio distinto al de ingreso (" + idServicioAnterior + ").";
+      }
+
+      // 3. Cálculo de Horas (Solo si es una SALIDA válida tras un INGRESO)
+      if (tipoActual === "SALIDA" && tipoAnterior === "INGRESO") {
+        var diffMs = new Date() - fechaAnterior;
+        var diffHrs = diffMs / (1000 * 60 * 60); // Convertir a horas
+        horasTrabajadas = diffHrs.toFixed(2);
+      }
+    } else if (tipoActual === "SALIDA") {
+      // Caso donde marca SALIDA pero no hay registros previos
+      validacionLogica = "ALERTA: SALIDA SIN INGRESO";
+    }
+
+    // --- GUARDAR EL REGISTRO CON LA NUEVA INTELIGENCIA ---
     sheetGeo.appendRow([
       new Date(),
       data.legajo,
@@ -14,29 +55,47 @@ function doPost(e) {
       data.lon_celular,
       data.distancia_metros,
       data.es_valida,
-      data.observaciones,
-      data.selfie_url
+      observacionesFinales,
+      data.selfie_url,
+      horasTrabajadas,    // Columna nueva 12
+      validacionLogica    // Columna nueva 13
     ]);
 
-    // 2. Si es un usuario nuevo, guardarlo también en Vigiladores
+    // 2. Registro de Usuario Nuevo (se mantiene igual)
     if (data.is_nuevo_usuario === true) {
-      var sheetVig = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Vigiladores");
+      var sheetVig = ss.getSheetByName("Vigiladores");
       sheetVig.appendRow([
         data.legajo,
         data.nombre_nuevo,
         data.dni_nuevo,
-        data.selfie_url, // Por ahora dice PENDIENTE_N8N, luego lo actualizaremos
-        "Sí"             // Habilitado por defecto
+        data.selfie_url, 
+        "Sí"
       ]);
     }
 
-    return ContentService.createTextOutput(JSON.stringify({"status": "success"}))
+    return ContentService.createTextOutput(JSON.stringify({"status": "success", "horas": horasTrabajadas}))
                          .setMimeType(ContentService.MimeType.JSON);
-                         
+
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({"status": "error", "mensaje": error.toString()}))
                          .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// Función auxiliar para buscar el pasado del vigilador
+function obtenerUltimaMarcacion(sheet, legajo) {
+  var data = sheet.getDataRange().getValues();
+  // Recorremos de abajo hacia arriba para encontrar la más reciente
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (data[i][1] == legajo) {
+      return {
+        timestamp: data[i][0],
+        tipo: data[i][2],
+        id_servicio: data[i][3]
+      };
+    }
+  }
+  return null;
 }
 
 function doGet(e) {
