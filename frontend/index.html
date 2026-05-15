@@ -34,11 +34,11 @@
         h2 { color: var(--primary); margin-top: 0; }
         .input-group { margin-bottom: 20px; text-align: left; }
         label { font-size: 14px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px; }
-        input[type="number"] {
+        input[type="number"], input[type="text"] {
             width: 100%; padding: 12px; border: 2px solid #e2e8f0; 
             border-radius: 8px; font-size: 16px; box-sizing: border-box; outline: none;
         }
-        input[type="number"]:focus { border-color: var(--primary); }
+        input[type="number"]:focus, input[type="text"]:focus { border-color: var(--primary); }
         .video-container {
             width: 100%; height: 280px; background: #e2e8f0;
             border-radius: 8px; overflow: hidden; margin-bottom: 15px;
@@ -62,14 +62,38 @@
         }
         /* Control de vistas de los pasos */
         #paso-2 { display: none; } 
+
+        /* --- ESTILOS DE LA NOTIFICACIÓN FLOTANTE (TOAST) --- */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1000;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            box-shadow: 0px 4px 15px rgba(0,0,0,0.2);
+            font-weight: 600;
+        }
+        #toast.show {
+            visibility: visible;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
     </style>
 </head>
 <body>
+<div id="toast">Notificación</div>
 
 <div class="app-container">
     <h2>GeoPresente</h2>
 
-    <!-- PASO 1: Identificación -->
     <div id="paso-1">
         <p id="instruccion-paso1" style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Por favor, identifícate para comenzar.</p>
         
@@ -78,7 +102,6 @@
             <input type="number" id="legajo" placeholder="Ej: 1045" required>
         </div>
 
-        <!-- DIV OCULTO: Solo aparece si el legajo es nuevo -->
         <div id="div-registro" style="display: none; margin-top: 15px; background: #f1f5f9; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1;">
             <p style="color: #ef4444; font-weight: bold; margin-top: 0; font-size: 14px;">Legajo no encontrado. Completa tus datos:</p>
             
@@ -92,7 +115,6 @@
         <button id="btn-validar" class="btn-continuar" onclick="validarLegajo()">Continuar</button>
     </div>
 
-    <!-- PASO 2: Biometría y Marcación (Oculto por defecto) -->
     <div id="paso-2">
         <div id="gps-status" class="status-badge">⏳ Iniciando sensores...</div>
         
@@ -112,6 +134,15 @@
     // Variables globales
     let gpsLocation = { lat: null, lon: null };
     let esUsuarioNuevo = false;
+
+    // Función para mostrar notificaciones flotantes
+    function mostrarNotificacion(mensaje, esError = false) {
+        const toast = document.getElementById("toast");
+        toast.innerText = mensaje;
+        toast.style.backgroundColor = esError ? "#ef4444" : "#10b981"; // Rojo si es error, verde si es éxito
+        toast.className = "show";
+        setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
+    }
     
     // ⚠️ REEMPLAZA ESTO CON TU URL DE RENDER
     const BASE_API_URL = "https://geopresent.onrender.com";
@@ -122,7 +153,10 @@
         const btnValidar = document.getElementById('btn-validar');
         const instruccion = document.getElementById('instruccion-paso1');
         
-        if (!legajoInput) return alert("El legajo es obligatorio.");
+        if (!legajoInput) {
+            mostrarNotificacion("El legajo es obligatorio.", true);
+            return;
+        }
 
         // Si ya determinamos que es nuevo y le pedimos el nombre, avanzamos
         if (esUsuarioNuevo) {
@@ -130,7 +164,8 @@
             const dniInput = document.getElementById('dni_nuevo').value;
             
             if (!nombreInput || !dniInput) {
-                return alert("Por favor, ingresa tu nombre y tu DNI para registrarte.");
+                mostrarNotificacion("Por favor, ingresa tu nombre y tu DNI para registrarte.", true);
+                return;
             }
             avanzarAlPaso2(`Bienvenido, ${nombreInput}`);
             return;
@@ -158,8 +193,7 @@
             }
         } catch (error) {
             console.error(error);
-            // Ahora la alerta nos dirá el motivo real técnico del fallo
-            alert("Error de conexión: " + error.message + "\nVerifica tu conexión a internet.");
+            mostrarNotificacion("Error de conexión: " + error.message + ". Verifica tu internet.", true);
             btnValidar.innerText = "Continuar";
             btnValidar.disabled = false;
         }
@@ -187,7 +221,7 @@
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
             video.srcObject = stream;
         } catch (err) {
-            alert("Se requiere acceso a la cámara para dar el presente.");
+            mostrarNotificacion("Se requiere acceso a la cámara para dar el presente.", true);
         }
     }
 
@@ -214,7 +248,10 @@
 
     // --- 3. PROCESAMIENTO DE MARCACIÓN ---
     async function procesarMarcacion(tipo) {
-        if (!gpsLocation.lat) return alert("Aguarde un momento, buscando señal GPS...");
+        if (!gpsLocation.lat) {
+            mostrarNotificacion("Aguarde un momento, buscando señal GPS...", true);
+            return;
+        }
 
         // Bloqueo de botones anti-doble clic
         const btnIngreso = document.querySelector('.btn-ingreso');
@@ -235,7 +272,7 @@
         const payload = {
             legajo: parseInt(document.getElementById('legajo').value),
             nombre_nuevo: esUsuarioNuevo ? document.getElementById('nombre_nuevo').value : null,
-            dni_nuevo: esUsuarioNuevo ? document.getElementById('dni_nuevo').value : null, // <-- DNI agregado aquí
+            dni_nuevo: esUsuarioNuevo ? document.getElementById('dni_nuevo').value : null, 
             tipo_marcacion: tipo,
             latitud_celular: gpsLocation.lat,
             longitud_celular: gpsLocation.lon,
@@ -254,13 +291,29 @@
             const data = await response.json();
 
             if (response.ok) {
-                alert(`¡${tipo} exitoso!\nServicio: ${data.data.descripcion_servicio}`);
-                window.location.reload(); 
+                // Notificación verde
+                mostrarNotificacion(`¡${tipo} exitoso!\nServicio: ${data.data.descripcion_servicio}`);
+                
+                // Esperamos 2.5 segundos para que lea la notificación antes de recargar
+                setTimeout(() => {
+                    window.location.reload(); 
+                }, 2500);
+
             } else {
-                alert(`Error: ${data.detail || 'Fallo de conexión'}`);
+                mostrarNotificacion(`Error: ${data.detail || 'Fallo de conexión'}`, true);
+                // Rehabilitar botones en caso de error
+                btnIngreso.disabled = false;
+                btnSalida.disabled = false;
+                btnIngreso.innerText = "INGRESO";
+                btnSalida.innerText = "SALIDA";
             }
         } catch (error) {
-            alert("Error conectando con el servidor central.");
+            mostrarNotificacion("Error conectando con el servidor central.", true);
+            // Rehabilitar botones en caso de error
+            btnIngreso.disabled = false;
+            btnSalida.disabled = false;
+            btnIngreso.innerText = "INGRESO";
+            btnSalida.innerText = "SALIDA";
         }
         statusBadge.innerText = "✅ GPS Localizado";
     }
